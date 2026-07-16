@@ -1,0 +1,34 @@
+load('ext://helm_resource', 'helm_resource')
+load('ext://git_resource', 'git_checkout')
+
+def setup(namespace, paths=".", livereload=False):
+  git_checkout('https://github.com/kklorenzotesta/tiltdemo-service-c.git#master', './.git_tilt_dependencies/service-c')
+  deps = load_dynamic(paths + '/.git_tilt_dependencies/service-c/Tiltfile.definitions')
+
+  deps["setup"](
+    namespace=namespace,
+    paths=paths + '/.git_tilt_dependencies/service-c'
+  )
+
+  helm_resource('backend-service', paths + '/chart',
+    namespace=namespace,
+    flags=[
+      "--create-namespace"
+    ],
+    image_deps=["backend-service"],
+    image_keys=[ # values overrides
+      ("image.name", "image.tag"),
+    ],
+    deps=[
+      paths + "/chart",
+    ] if livereload else [],
+    resource_deps=[ # for installation order
+      "service-c"
+    ]
+  )
+
+  docker_build('backend-service', paths,
+    dockerfile=paths + "/Dockerfile",
+    live_update=[
+        sync(paths + "/src", "/usr/share/nginx/html/"),
+    ] if livereload else [],)
